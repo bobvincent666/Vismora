@@ -44,6 +44,7 @@ export function uploadedReferences(name: string, url: string, width: number, hei
 export function recipeBackup(recipe: RecipeState): RecipeState {
   return {
     portrait: recipe.portrait?.source === 'upload' ? null : recipe.portrait,
+    portraitB: recipe.portraitB?.source === 'upload' ? null : recipe.portraitB ?? null,
     costume: recipe.costume?.source === 'upload' ? null : recipe.costume,
     pose: recipe.pose?.source === 'upload' ? null : recipe.pose,
     extraImages: [],

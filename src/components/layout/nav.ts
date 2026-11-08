@@ -1,6 +1,8 @@
 import type { LinkProps } from '@tanstack/react-router'
 import {
   BookOpenIcon,
+  WorkflowIcon,
+  MessageSquareTextIcon,
   KeyRoundIcon,
   LayoutDashboardIcon,
   PersonStandingIcon,
@@ -27,7 +29,7 @@ export const navGroups: NavGroup[] = [
     label: '工作台',
     items: [
       { title: '图库总览', to: '/', icon: LayoutDashboardIcon },
-      { title: 'AI 角色合成台', to: '/studio', icon: SparklesIcon, badge: 'PRO' },
+      { title: 'AI工作台', to: '/studio', icon: SparklesIcon, badge: 'PRO' },
     ],
   },
   {
@@ -42,6 +44,8 @@ export const navGroups: NavGroup[] = [
     label: '配置与说明',
     items: [
       { title: 'API 接口配置', to: '/settings', icon: KeyRoundIcon },
+      { title: '工作流模板配置', to: '/workflows', icon: WorkflowIcon },
+      { title: '提示词库', to: '/prompts', icon: MessageSquareTextIcon },
       { title: '使用说明与免责声明', to: '/guide', icon: BookOpenIcon },
     ],
   },

@@ -18,6 +18,7 @@ import { durableImage, snapshotGeneration } from '@/lib/generationSnapshot'
 import { recipeBackup } from '@/lib/recipeImages'
 import { randomSlot, type RandomScope, type ReferencePools, type ReferenceSlot } from '@/lib/randomRecipe'
 import {
+  autoDetectComfyMappings,
   buildRecipePrompt,
   COMFYUI_WORKFLOW_TEMPLATES,
   DEFAULT_COMFY_PRESET,
@@ -100,6 +101,8 @@ const DEFAULT_API_CONFIG: ApiConfig = {
   },
   gptParams: {
     endpointMode: 'images_edits_json',
+    resolution: '2k',
+    aspectRatio: '2:3',
     size: '1024x1536',
     quality: 'high',
     inputFidelity: 'high',
@@ -172,9 +175,18 @@ function mergeStoredConfig(raw: unknown): ApiConfig {
   const activeProvider = obj.activeProvider ?? DEFAULT_API_CONFIG.activeProvider
   // v3 起服务端 CORS 代理默认关闭，仅在切换到 Qwen / Doubao 时自动关联开启
   const useProxy =
-    storedVer < 3
+    activeProvider === 'gpt' && obj.gptParams?.endpointMode === 'apimart'
+      ? (obj.useProxy ?? true)
+      : storedVer < 3
       ? shouldEnableProxyByDefault(activeProvider)
       : (obj.useProxy ?? shouldEnableProxyByDefault(activeProvider))
+
+  // 修复旧版将右侧人物节点误绑定为服装的已保存配置。
+  const detected = autoDetectComfyMappings(comfy.params.workflowJson)
+  if (detected.portraitBNodeId !== 'none') {
+    if (!comfy.params.portraitBNodeId || comfy.params.portraitBNodeId === 'none') comfy.params.portraitBNodeId = detected.portraitBNodeId
+    if (comfy.params.costumeNodeId === detected.portraitBNodeId) comfy.params.costumeNodeId = detected.costumeNodeId
+  }
   return {
     ...DEFAULT_API_CONFIG,
     ...obj,
@@ -224,6 +236,7 @@ interface StudioContextValue {
   startGeneration: (overridePrompt?: string) => Promise<void>
   refreshStitchPreview: () => Promise<void>
   setPortrait: (item: PortraitItem | null) => void
+  setPortraitB: (item: PortraitItem | null) => void
   setCostume: (item: CostumeItem | null) => void
   setPose: (item: PoseItem | null) => void
   togglePortrait: (item: PortraitItem) => void
@@ -258,6 +271,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       const parsed = JSON.parse(raw)
       return {
         portrait: parsed.portrait ?? null,
+        portraitB: parsed.portraitB ?? null,
         costume: parsed.costume ?? null,
         pose: parsed.pose ?? null,
         extraImages: Array.isArray(parsed.extraImages) ? parsed.extraImages : [],
@@ -340,6 +354,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         }
         setRecipe({
           portrait: savedRecipe.portrait ?? null,
+          portraitB: savedRecipe.portraitB ?? null,
           costume: savedRecipe.costume ?? null,
           pose: savedRecipe.pose ?? null,
           workflowImages: savedRecipe.workflowImages ?? {},
@@ -413,6 +428,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   }
 
   const setPortrait = (portrait: PortraitItem | null) => setRecipe((r) => ({ ...r, portrait }))
+  const setPortraitB = (portraitB: PortraitItem | null) => setRecipe((r) => ({ ...r, portraitB }))
   const setCostume = (costume: CostumeItem | null) => setRecipe((r) => ({ ...r, costume }))
   const setPose = (pose: PoseItem | null) => setRecipe((r) => ({ ...r, pose }))
 
@@ -490,7 +506,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     const cp = activeComfyParams
     const identity = workflowIdentity(cp.workflowJson)
     const workflow = parseParameterWorkflow(cp.workflowJson)
-    const mapped = [cp.portraitNodeId, cp.costumeNodeId, cp.poseNodeId, cp.stitchedNodeId]
+    const mapped = [cp.portraitNodeId, cp.portraitBNodeId, cp.costumeNodeId, cp.poseNodeId, cp.stitchedNodeId]
     const ids = new Set(Object.entries(workflow || {}).filter(([id, node]) => !mapped.includes(id) && typeof node.inputs.image === 'string').map(([id]) => id))
     // IndexedDB 恢复与工作流变更同步时清理失效映射。
     // oxlint-disable-next-line react/set-state-in-effect
@@ -586,7 +602,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   }
 
   const updateComfyUiParams = (patch: Partial<ComfyUiParams>) => {
-    setApiConfig((prev) => ({ ...prev, comfyuiParams: { ...prev.comfyuiParams, ...patch } }))
+    setApiConfig((prev) => ({ ...prev, comfyuiParams: { ...prev.comfyuiParams,
+      ...(patch.workflowJson !== undefined && !Object.hasOwn(patch, 'libraryWorkflowId') ? { libraryWorkflowId: undefined, libraryPromptId: undefined } : {}),
+      ...patch } }))
   }
 
   const persistHistory = (update: (current: GenerationHistoryItem[]) => GenerationHistoryItem[]) => {
@@ -680,7 +698,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     const recipeSnapshot = recipe
     const configSnapshot = apiConfig
     const finalPrompt = overridePrompt ?? customPrompt ?? buildRecipePrompt(recipeSnapshot, configSnapshot.stylePreset, configSnapshot.activeProvider === 'comfyui' && recipeSnapshot.workflowImagesIdentity === workflowIdentity(configSnapshot.comfyuiParams.workflowJson) ? Object.values(recipeSnapshot.workflowImages || {}) : [])
-    let record: ActiveTask = { prompt: finalPrompt, summary: [recipeSnapshot.portrait?.发型名称, recipeSnapshot.costume?.服装名称, recipeSnapshot.pose?.姿势名称].filter(Boolean).join(' + ') || '自定义合成' }
+    let record: ActiveTask = { prompt: finalPrompt, summary: [recipeSnapshot.portrait?.发型名称, recipeSnapshot.portraitB ? `人物B：${recipeSnapshot.portraitB.发型名称}` : null, recipeSnapshot.costume?.服装名称, recipeSnapshot.pose?.姿势名称].filter(Boolean).join(' + ') || '自定义合成' }
     isGeneratingRef.current = true
     setIsGenerating(true)
     setGeneratingModel(configSnapshot.activeProvider)
@@ -745,6 +763,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         startGeneration,
         refreshStitchPreview,
         setPortrait,
+        setPortraitB,
         setCostume,
         setPose,
         togglePortrait,

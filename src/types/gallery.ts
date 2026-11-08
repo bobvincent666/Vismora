@@ -78,6 +78,7 @@ export interface ExtraReferenceImage {
 
 export interface RecipeState {
   portrait: PortraitItem | null
+  portraitB?: PortraitItem | null
   costume: CostumeItem | null
   pose: PoseItem | null
   workflowImages?: Record<string, ExtraReferenceImage>
@@ -104,11 +105,14 @@ export interface WorkflowParameterOverrides {
 }
 
 export interface ComfyUiParams {
+  libraryWorkflowId?: string
+  libraryPromptId?: string
   parameterOverrides?: WorkflowParameterOverrides
   workflowPreset: 'qwen2509_3img' | 'qwen2509_2img' | 'qwen21_3img' | 'qwen21_2img' | 'custom'
   workflowJson: string
   promptNodeId: string
   portraitNodeId: string
+  portraitBNodeId: string
   costumeNodeId: string
   poseNodeId: string
   stitchedNodeId: string
@@ -120,7 +124,9 @@ export interface ComfyUiParams {
 }
 
 export interface GptParams {
-  endpointMode: 'images_edits_json' | 'images_edits' | 'responses' | 'chat'
+  endpointMode: 'images_edits_json' | 'images_edits' | 'responses' | 'chat' | 'apimart'
+  resolution: '1k' | '2k' | '4k'
+  aspectRatio: 'auto' | '1:1' | '2:3' | '3:2' | '3:4' | '4:3' | '9:16' | '16:9' | '4:5' | '5:4'
   size: 'auto' | '1024x1536' | '1024x1024' | '1536x1024'
   quality: 'auto' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
   inputFidelity: 'high' | 'low'

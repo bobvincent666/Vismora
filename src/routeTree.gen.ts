@@ -14,8 +14,10 @@ import { Route as CostumesRouteImport } from './routes/costumes'
 import { Route as GuideRouteImport } from './routes/guide'
 import { Route as PortraitsRouteImport } from './routes/portraits'
 import { Route as PosesRouteImport } from './routes/poses'
+import { Route as PromptsRouteImport } from './routes/prompts'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as StudioRouteImport } from './routes/studio'
+import { Route as WorkflowsRouteImport } from './routes/workflows'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -42,6 +44,11 @@ const PosesRoute = PosesRouteImport.update({
   path: '/poses',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PromptsRoute = PromptsRouteImport.update({
+  id: '/prompts',
+  path: '/prompts',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -52,6 +59,11 @@ const StudioRoute = StudioRouteImport.update({
   path: '/studio',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WorkflowsRoute = WorkflowsRouteImport.update({
+  id: '/workflows',
+  path: '/workflows',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -59,8 +71,10 @@ export interface FileRoutesByFullPath {
   '/guide': typeof GuideRoute
   '/portraits': typeof PortraitsRoute
   '/poses': typeof PosesRoute
+  '/prompts': typeof PromptsRoute
   '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
+  '/workflows': typeof WorkflowsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -68,8 +82,10 @@ export interface FileRoutesByTo {
   '/guide': typeof GuideRoute
   '/portraits': typeof PortraitsRoute
   '/poses': typeof PosesRoute
+  '/prompts': typeof PromptsRoute
   '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
+  '/workflows': typeof WorkflowsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -78,8 +94,10 @@ export interface FileRoutesById {
   '/guide': typeof GuideRoute
   '/portraits': typeof PortraitsRoute
   '/poses': typeof PosesRoute
+  '/prompts': typeof PromptsRoute
   '/settings': typeof SettingsRoute
   '/studio': typeof StudioRoute
+  '/workflows': typeof WorkflowsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -89,8 +107,10 @@ export interface FileRouteTypes {
     | '/guide'
     | '/portraits'
     | '/poses'
+    | '/prompts'
     | '/settings'
     | '/studio'
+    | '/workflows'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -98,8 +118,10 @@ export interface FileRouteTypes {
     | '/guide'
     | '/portraits'
     | '/poses'
+    | '/prompts'
     | '/settings'
     | '/studio'
+    | '/workflows'
   id:
     | '__root__'
     | '/'
@@ -107,8 +129,10 @@ export interface FileRouteTypes {
     | '/guide'
     | '/portraits'
     | '/poses'
+    | '/prompts'
     | '/settings'
     | '/studio'
+    | '/workflows'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -117,8 +141,10 @@ export interface RootRouteChildren {
   GuideRoute: typeof GuideRoute
   PortraitsRoute: typeof PortraitsRoute
   PosesRoute: typeof PosesRoute
+  PromptsRoute: typeof PromptsRoute
   SettingsRoute: typeof SettingsRoute
   StudioRoute: typeof StudioRoute
+  WorkflowsRoute: typeof WorkflowsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -158,6 +184,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PosesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/prompts': {
+      id: '/prompts'
+      path: '/prompts'
+      fullPath: '/prompts'
+      preLoaderRoute: typeof PromptsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -172,6 +205,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StudioRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/workflows': {
+      id: '/workflows'
+      path: '/workflows'
+      fullPath: '/workflows'
+      preLoaderRoute: typeof WorkflowsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -181,8 +221,10 @@ const rootRouteChildren: RootRouteChildren = {
   GuideRoute: GuideRoute,
   PortraitsRoute: PortraitsRoute,
   PosesRoute: PosesRoute,
+  PromptsRoute: PromptsRoute,
   SettingsRoute: SettingsRoute,
   StudioRoute: StudioRoute,
+  WorkflowsRoute: WorkflowsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,5 +1,6 @@
 import { Link, useLocation } from '@tanstack/react-router'
-import { ExternalLinkIcon, LayersIcon, SparklesIcon } from 'lucide-react'
+import { SparklesIcon } from 'lucide-react'
+import illusionLogo from '@/assets/illusion-logo.png'
 import { Badge } from '@/components/ui/badge'
 import {
   Sidebar,
@@ -20,7 +21,7 @@ export function AppSidebar() {
   const pathname = useLocation({ select: (l) => l.pathname })
   const active = activeNavTo(pathname)
   const { recipe } = useStudio()
-  const count = [recipe.portrait, recipe.costume, recipe.pose].filter(Boolean).length
+  const count = [recipe.portrait, recipe.portraitB, recipe.costume, recipe.pose].filter(Boolean).length
 
   return (
     <Sidebar collapsible="icon">
@@ -29,12 +30,12 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link to="/">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <LayersIcon className="size-4" />
+                <div className="flex aspect-square size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white">
+                  <img src={illusionLogo} alt="幻象工坊 Logo" width={32} height={32} className="size-8 scale-[1.9] object-contain" />
                 </div>
                 <div className="grid flex-1 text-left leading-tight">
-                  <span className="truncate text-sm font-semibold">POSE &amp; CHARACTER</span>
-                  <span className="truncate text-xs text-muted-foreground">AI 角色三合一参考台</span>
+                  <span className="truncate text-sm font-semibold">幻象工坊</span>
+                  <span className="whitespace-nowrap text-[10px] text-muted-foreground">换人、换装、换姿势，一键出图</span>
                 </div>
               </Link>
             </SidebarMenuButton>
@@ -78,23 +79,10 @@ export function AppSidebar() {
                 <div className="grid flex-1 text-left text-xs leading-tight">
                   <span className="truncate font-semibold">角色配方槽 ({count}/3)</span>
                   <span className="truncate text-[11px] text-muted-foreground">
-                    {count === 0 ? '未选择 · 点击去捏人' : '点击进入 AI 合成台'}
+                    {count === 0 ? '未选择 · 点击去捏人' : '点击进入 AI工作台'}
                   </span>
                 </div>
               </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="sm" asChild tooltip="访问 GitHub 仓库">
-              <a
-                href="https://github.com/anhao/ai-pose-gallery-zh"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-muted-foreground"
-              >
-                <ExternalLinkIcon className="size-3.5" />
-                <span>GitHub · @anhao_ai</span>
-              </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

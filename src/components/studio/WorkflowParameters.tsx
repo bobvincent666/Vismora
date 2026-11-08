@@ -54,11 +54,11 @@ export function WorkflowParameters({ onPreview, onUploadingChange }: { onPreview
     queryFn: () => fetchComfyObjectInfo(endpoint.baseUrl, endpoint.apiKey, cp.workflowJson),
     enabled: Boolean(identity), retry: false, staleTime: 60_000,
   })
-  const images = getWorkflowImages(cp.workflowJson, [cp.portraitNodeId, cp.costumeNodeId, cp.poseNodeId, cp.stitchedNodeId], schemas)
+  const images = getWorkflowImages(cp.workflowJson, [cp.portraitNodeId, cp.portraitBNodeId, cp.costumeNodeId, cp.poseNodeId, cp.stitchedNodeId], schemas)
   const excluded = new Set<string>()
   // 图片和主提示词由各自上传、编辑入口管理。
   for (const image of images) excluded.add(`${image.nodeId}.image`)
-  for (const nodeId of [cp.portraitNodeId, cp.costumeNodeId, cp.poseNodeId, cp.stitchedNodeId]) excluded.add(`${nodeId}.image`)
+  for (const nodeId of [cp.portraitNodeId, cp.portraitBNodeId, cp.costumeNodeId, cp.poseNodeId, cp.stitchedNodeId]) excluded.add(`${nodeId}.image`)
   for (const input of ['prompt', 'text', 'string', 'positive']) excluded.add(`${cp.promptNodeId}.${input}`)
   const controls = getWorkflowControls(cp.workflowJson, schemas || {}, excluded)
   const saved = cp.parameterOverrides?.workflowId === identity ? cp.parameterOverrides.values || {} : {}

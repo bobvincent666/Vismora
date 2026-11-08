@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import * as http from 'node:http'
 import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
@@ -20,6 +21,10 @@ const MIME: Record<string, string> = {
 // 1. 直接挂载仓库根目录下的 data/、thumbs/、img/，避免拷贝 6.8 GB 素材
 // 2. 提供 /api/proxy 同源转发接口，解决 DashScope (Qwen) / 火山方舟 (Doubao) 官方接口的浏览器 CORS 限制
 function localAssetsAndProxyPlugin(): Plugin {
+  // Node fetch 默认不读取 HTTPS_PROXY；本地服务与命令行应使用相同的代理配置。
+  if ((process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.https_proxy || process.env.http_proxy) && typeof http.setGlobalProxyFromEnv === 'function') {
+    http.setGlobalProxyFromEnv()
+  }
   const rootDir = import.meta.dirname
   const prefixes = ['/data/', '/thumbs/', '/img/', '/og-cover.jpg', '/robots.txt', '/sitemap.xml']
 
@@ -53,6 +58,7 @@ function localAssetsAndProxyPlugin(): Plugin {
         method: req.method || 'POST',
         headers: forwardHeaders,
         body: rawBody.length > 0 ? rawBody : undefined,
+        redirect: 'error',
       })
 
       res.statusCode = upstream.status
@@ -63,7 +69,9 @@ function localAssetsAndProxyPlugin(): Plugin {
     } catch (err: any) {
       res.statusCode = 502
       res.setHeader('Content-Type', 'application/json; charset=utf-8')
-      res.end(JSON.stringify({ error: { message: err?.message || 'Proxy request failed' } }))
+      const code = err?.cause?.code || err?.code
+      const detail = code ? `（${String(code).replace(/[^A-Z0-9_]/gi, '').slice(0, 64)}）` : ''
+      res.end(JSON.stringify({ error: { message: `本地代理无法连接模型服务${detail}，请检查网络和启动终端的 HTTPS_PROXY 配置。` } }))
     }
   }
 

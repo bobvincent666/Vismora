@@ -21,6 +21,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'https://ark.cn-beijing.volces.com', // 火山方舟 / Doubao
   'https://generativelanguage.googleapis.com', // Google Gemini
   'https://api.openai.com', // OpenAI
+  'https://api.apimart.ai', // 已配置的异步图像通道
 ]
 
 function matchOriginRule(target: URL, rawRule: string): boolean {
@@ -92,9 +93,8 @@ const limitBodySize = (body: ReadableStream<Uint8Array> | null, limit: number) =
   )
 }
 
-export const onRequestPost = async (context: { request: Request; env?: ProxyEnv }) => {
+const handleRequest = async (context: { request: Request; env?: ProxyEnv }) => {
   const { request, env } = context
-
   const targetUrl = request.headers.get('x-target-url')
   if (!targetUrl) return jsonResponse(400, 'Missing x-target-url header')
 
@@ -110,9 +110,19 @@ export const onRequestPost = async (context: { request: Request; env?: ProxyEnv 
     return jsonResponse(403, 'Target origin not allowed')
   }
 
+  if (target.username || target.password) return jsonResponse(400, 'Target credentials are not allowed')
+  if (request.method === 'GET' && (target.origin !== 'https://api.apimart.ai' || !/^\/v1\/tasks\/[^/]+$/.test(target.pathname))) {
+    return jsonResponse(403, 'GET is only supported for image task status queries')
+  }
+  if (!['GET', 'POST'].includes(request.method)) return jsonResponse(405, 'Method Not Allowed')
+
+  // 该上传通道允许20MiB图片；额外1MiB容纳multipart头，其他请求仍限10MiB。
+  const bodyLimit = target.origin === 'https://api.apimart.ai' && target.pathname === '/v1/uploads/images'
+    ? 21 * 1024 * 1024 : MAX_BODY_BYTES
+
   const declaredLength = Number(request.headers.get('content-length') ?? '0')
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
-    return jsonResponse(413, `Request body exceeds ${MAX_BODY_BYTES} bytes`)
+  if (Number.isFinite(declaredLength) && declaredLength > bodyLimit) {
+    return jsonResponse(413, `Request body exceeds ${bodyLimit} bytes`)
   }
 
   const forwardHeaders = new Headers()
@@ -123,9 +133,10 @@ export const onRequestPost = async (context: { request: Request; env?: ProxyEnv 
 
   try {
     const upstream = await fetch(target.toString(), {
-      method: 'POST',
+      method: request.method,
       headers: forwardHeaders,
-      body: limitBodySize(request.body, MAX_BODY_BYTES),
+      body: request.method === 'GET' ? undefined : limitBodySize(request.body, bodyLimit),
+      redirect: 'error',
     })
     return new Response(upstream.body, {
       status: upstream.status,
@@ -135,8 +146,11 @@ export const onRequestPost = async (context: { request: Request; env?: ProxyEnv 
     })
   } catch (err) {
     if (err instanceof BodyTooLargeError) {
-      return jsonResponse(413, `Request body exceeds ${MAX_BODY_BYTES} bytes`)
+      return jsonResponse(413, `Request body exceeds ${bodyLimit} bytes`)
     }
     return jsonResponse(502, err instanceof Error ? err.message : 'Upstream proxy error')
   }
 }
+
+export const onRequestPost = handleRequest
+export const onRequestGet = handleRequest

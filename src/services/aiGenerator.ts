@@ -2,6 +2,9 @@ import type { ApiConfig, ExtraReferenceImage, ImageProviderId, RecipeState } fro
 import { applyWorkflowOverrides, getWorkflowImages, validateReferenceCombinations, workflowIdentity, type ComfyObjectInfo } from '@/lib/comfyWorkflowParameters'
 import { poseImagePath, referenceImageUrl } from '@/lib/recipeImages'
 import qwen2509ThreeImageWorkflow from '@/workflows/qwen_image_edit_2509_3img.api.json'
+import { missingComfyRequiredInputs } from './comfyWorkflowInputs'
+import { generateApimartImage } from './apimart'
+import { prepareOptionalWomensCostume, resolveWomensCostumePrompt } from './optionalCostume'
 
 export interface ProviderModelOption {
   value: string
@@ -48,6 +51,7 @@ export const PROVIDER_META: Record<
       { value: 'gpt-image-2.5-sunburst', label: 'gpt-image-2.5-sunburst' },
       { value: 'gpt-image-2.5-flare', label: 'gpt-image-2.5-flare' },
       { value: 'gpt-image-2', label: 'gpt-image-2' },
+      { value: 'gpt-image-2-official', label: 'gpt-image-2-official（APIMart）' },
       { value: 'gpt-image-1.5', label: 'gpt-image-1.5' },
       { value: 'gpt-image-1', label: 'gpt-image-1' },
       { value: 'custom', label: '自定义模型 ID' },
@@ -155,7 +159,7 @@ const PHOTO_STYLES = new Set(['realistic', 'fashion', 'film'])
 export function buildRecipePrompt(recipe: RecipeState, stylePreset = 'realistic', workflowImages: ExtraReferenceImage[] = []): string {
   const styleInfo = STYLE_PRESETS[stylePreset] ?? STYLE_PRESETS.realistic
   const isPhoto = PHOTO_STYLES.has(stylePreset)
-  const faceless = !recipe.portrait && !workflowImages.some((image) => image.role === 'character_sheet') && Boolean(recipe.costume && recipe.pose)
+  const faceless = !recipe.portrait && !recipe.portraitB && !workflowImages.some((image) => image.role === 'character_sheet') && Boolean(recipe.costume && recipe.pose)
   const clauses: string[] = []
   let idx = 1
   let costumeIdx = 0
@@ -177,6 +181,10 @@ export function buildRecipePrompt(recipe: RecipeState, stylePreset = 'realistic'
         ? `• 人物：图${idx}中的人物，保持其脸型、五官、发型和发色一致。${skin}${outfit}`
         : `• 人物：图${idx}中的人物，保持其脸型、五官、发型（${hairDesc}）和发色一致。${skin}${outfit}`
     )
+    idx++
+  }
+  if (recipe.portraitB) {
+    clauses.push(`• 人物B：图${idx}提供第二位成年人物的身份、五官、发型和肤色。与人物A保持不同身份；在双人姿势中，人物A对应画面左侧，人物B对应画面右侧。`)
     idx++
   }
   if (recipe.costume) {
@@ -271,6 +279,9 @@ export async function stitchRecipeCanvas(recipe: RecipeState): Promise<string> {
       sub: recipe.portrait.标题,
       src: recipe.portrait.原图 || recipe.portrait.缩略图,
     })
+  }
+  if (recipe.portraitB) {
+    list.push({ tag: `图${idx++} · 人物B`, sub: recipe.portraitB.标题, src: recipe.portraitB.原图 || recipe.portraitB.缩略图 })
   }
   if (recipe.costume) {
     list.push({
@@ -408,6 +419,7 @@ async function smartFetch(
     method: init.method || 'POST',
     headers,
     body: init.body,
+    signal: init.signal,
   })
 }
 
@@ -463,7 +475,7 @@ function extractUniversalImage(json: any): string | null {
 // 本地 ComfyUI API 工作流模板与节点解析工具
 // ============================================================================
 
-type ComfyNode = { class_type: string; inputs: Record<string, any>; _meta?: { title?: string; studio?: { imageRole?: string } } }
+type ComfyNode = { class_type: string; inputs: Record<string, any>; _meta?: { title?: string; studio?: { imageRole?: string }; optionalReference?: string } }
 type ComfyWorkflow = Record<string, ComfyNode>
 
 export type ComfyPresetId = 'qwen2509_3img' | 'qwen2509_2img' | 'qwen21_3img' | 'qwen21_2img'
@@ -471,6 +483,7 @@ export type ComfyPresetId = 'qwen2509_3img' | 'qwen2509_2img' | 'qwen21_3img' | 
 export interface ComfyNodeMappings {
   promptNodeId: string
   portraitNodeId: string
+  portraitBNodeId: string
   costumeNodeId: string
   poseNodeId: string
   stitchedNodeId: string
@@ -618,22 +631,22 @@ export const COMFYUI_WORKFLOW_TEMPLATES: Record<
   qwen2509_3img: {
     label: 'Qwen Image Edit 2509 三图合成（人像+服装+姿势）· 推荐',
     workflow: qwen2509ThreeImageWorkflow as ComfyWorkflow,
-    defaults: { promptNodeId: '12', portraitNodeId: '1', costumeNodeId: '2', poseNodeId: '3', stitchedNodeId: 'none' },
+    defaults: { promptNodeId: '12', portraitNodeId: '1', portraitBNodeId: 'none', costumeNodeId: '2', poseNodeId: '3', stitchedNodeId: 'none' },
   },
   qwen2509_2img: {
     label: 'Qwen Image Edit 2509 双图姿态迁移（人物+姿势）',
     workflow: buildQwen2509TwoImage(),
-    defaults: { promptNodeId: '12', portraitNodeId: '1', costumeNodeId: 'none', poseNodeId: '3', stitchedNodeId: 'none' },
+    defaults: { promptNodeId: '12', portraitNodeId: '1', portraitBNodeId: 'none', costumeNodeId: 'none', poseNodeId: '3', stitchedNodeId: 'none' },
   },
   qwen21_3img: {
     label: 'Qwen-Image 2.1 三图合成（需另装 2.1 模型）',
     workflow: buildQwen21Workflow(true),
-    defaults: { promptNodeId: '9', portraitNodeId: '1', costumeNodeId: '2', poseNodeId: '3', stitchedNodeId: 'none' },
+    defaults: { promptNodeId: '9', portraitNodeId: '1', portraitBNodeId: 'none', costumeNodeId: '2', poseNodeId: '3', stitchedNodeId: 'none' },
   },
   qwen21_2img: {
     label: 'Qwen-Image 2.1 双图姿态迁移（需另装 2.1 模型）',
     workflow: buildQwen21Workflow(false),
-    defaults: { promptNodeId: '9', portraitNodeId: '1', costumeNodeId: 'none', poseNodeId: '2', stitchedNodeId: 'none' },
+    defaults: { promptNodeId: '9', portraitNodeId: '1', portraitBNodeId: 'none', costumeNodeId: 'none', poseNodeId: '2', stitchedNodeId: 'none' },
   },
 }
 
@@ -705,6 +718,7 @@ export function autoDetectComfyMappings(workflowJson: string): ComfyNodeMappings
   const parsed = parseComfyWorkflowNodes(workflowJson)
   let promptNodeId = 'none'
   let portraitNodeId = 'none'
+  let portraitBNodeId = 'none'
   let costumeNodeId = 'none'
   let poseNodeId = 'none'
   let stitchedNodeId = 'none'
@@ -716,7 +730,10 @@ export function autoDetectComfyMappings(workflowJson: string): ComfyNodeMappings
   const usedIds = new Set<string>()
   const slotImages = parsed.imageNodes.filter((node) => node.role !== 'character_sheet')
   for (const n of slotImages) {
-    if (/人像|脸|人物|portrait|face|person/i.test(n.title) && portraitNodeId === 'none') {
+    if (/右侧|人物\s*B|人像\s*B|portrait\s*B|person\s*B|second\s*(portrait|person)/i.test(n.title) && portraitBNodeId === 'none') {
+      portraitBNodeId = n.id
+      usedIds.add(n.id)
+    } else if (/人像|头像|脸|人物|portrait|face|person/i.test(n.title) && portraitNodeId === 'none') {
       portraitNodeId = n.id
       usedIds.add(n.id)
     } else if (/服装|衣|穿搭|costume|cloth|outfit/i.test(n.title) && costumeNodeId === 'none') {
@@ -736,7 +753,7 @@ export function autoDetectComfyMappings(workflowJson: string): ComfyNodeMappings
   if (costumeNodeId === 'none' && remaining[0]) costumeNodeId = remaining.shift()!.id
   if (poseNodeId === 'none' && remaining[0]) poseNodeId = remaining.shift()!.id
 
-  return { promptNodeId, portraitNodeId, costumeNodeId, poseNodeId, stitchedNodeId }
+  return { promptNodeId, portraitNodeId, portraitBNodeId, costumeNodeId, poseNodeId, stitchedNodeId }
 }
 
 // ---------------------------------------------------------------------------
@@ -911,21 +928,8 @@ export async function checkComfyWorkflow(
     const optional = def.input?.optional || {}
     const inputs = node.inputs || {}
 
-    for (const [name, spec] of Object.entries<any>(required)) {
-      // V3 自动扩展组使用 images.image_1 等扁平输入，组名本身不参与执行。
-      if (spec?.[0] === 'COMFY_AUTOGROW_V3') {
-        const template = spec[1]?.template
-        if (template?.input?.required) {
-          for (let i = 0; i < (template.min ?? 0); i++) {
-            const child = template.names?.[i] ?? `${template.prefix}${i}`
-            if (!(`${name}.${child}` in inputs)) {
-              errors.push(`节点 ${id}「${title}」缺少必填输入 ${name}.${child}`)
-            }
-          }
-        }
-        continue
-      }
-      if (!(name in inputs)) errors.push(`节点 ${id}「${title}」缺少必填输入 ${name}`)
+    for (const name of missingComfyRequiredInputs(required, inputs)) {
+      errors.push(`节点 ${id}「${title}」缺少必填输入 ${name}`)
     }
 
     for (const [name, value] of Object.entries(inputs)) {
@@ -1388,11 +1392,12 @@ async function generateWithComfyUi(params: {
   report({ stage: 'check', message: '正在检查 ComfyUI 服务与模型…' })
   await testComfyConnection(baseUrl, apiKey)
   const schemas = await fetchComfyObjectInfo(baseUrl, apiKey, cp.workflowJson)
-  const extraImageNodes = getWorkflowImages(cp.workflowJson, [cp.portraitNodeId, cp.costumeNodeId, cp.poseNodeId, cp.stitchedNodeId], schemas)
+  const extraImageNodes = getWorkflowImages(cp.workflowJson, [cp.portraitNodeId, cp.portraitBNodeId, cp.costumeNodeId, cp.poseNodeId, cp.stitchedNodeId], schemas)
   const extraImages = recipe.workflowImagesIdentity === workflowIdentity(cp.workflowJson) ? recipe.workflowImages || {} : {}
   const selectedJson = applyWorkflowOverrides(cp.workflowJson, cp.parameterOverrides, schemas)
   const check = await checkComfyWorkflow(baseUrl, apiKey, selectedJson, [
     cp.portraitNodeId,
+    cp.portraitBNodeId,
     cp.costumeNodeId,
     cp.poseNodeId,
     cp.stitchedNodeId,
@@ -1402,9 +1407,16 @@ async function generateWithComfyUi(params: {
     throw new Error(`[ComfyUI] 工作流与本机不匹配：\n${check.errors.join('\n')}`)
   }
   const workflow: ComfyWorkflow = JSON.parse(check.fixedJson ?? selectedJson)
+  const optionalCostumeNotes = prepareOptionalWomensCostume(workflow, cp.costumeNodeId, Boolean(recipe.costume))
 
   // 1. 按映射槽位上传参考图并注入节点
   const slotUploads: Array<{ nodeId: string; src: string | null; prefix: string; label: string }> = [
+    {
+      nodeId: cp.portraitBNodeId || 'none',
+      src: recipe.portraitB ? recipe.portraitB.原图 || recipe.portraitB.缩略图 : null,
+      prefix: 'studio_portrait_b',
+      label: '人物B（男性头像）',
+    },
     {
       nodeId: cp.portraitNodeId,
       src: recipe.portrait ? recipe.portrait.原图 || recipe.portrait.缩略图 : null,
@@ -1431,10 +1443,14 @@ async function generateWithComfyUi(params: {
   if (combinationError) throw new Error(`[ComfyUI] ${combinationError}`)
 
   const invalidSlots = slotUploads.filter((slot) => slot.nodeId && slot.nodeId !== 'none' && !parsedInfo.imageNodes.some((node) => node.id === slot.nodeId))
+  const boundIds = slotUploads.map((s) => s.nodeId).filter((id) => id && id !== 'none')
+  if (new Set(boundIds).size !== boundIds.length) {
+    throw new Error('[ComfyUI] 参考图节点不能重复绑定，请为人物A、人物B、服装和姿势分别选择节点')
+  }
   if (invalidSlots.length) {
     throw new Error(`[ComfyUI] ${invalidSlots.map((slot) => slot.label).join('、')}节点映射已失效，请重新识别或选择节点`)
   }
-  const missingSlots = slotUploads.filter((slot) => slot.nodeId && slot.nodeId !== 'none' && !slot.src && parsedInfo.imageNodes.find((node) => node.id === slot.nodeId)?.emptyValue === undefined)
+  const missingSlots = slotUploads.filter((slot) => slot.nodeId && slot.nodeId !== 'none' && workflow[slot.nodeId] && !slot.src && parsedInfo.imageNodes.find((node) => node.id === slot.nodeId)?.emptyValue === undefined)
   if (missingSlots.length) {
     throw new Error(`[ComfyUI] 请先选择或上传：${missingSlots.map((slot) => slot.label).join('、')}`)
   }
@@ -1478,6 +1494,11 @@ async function generateWithComfyUi(params: {
         break
       }
     }
+  }
+
+  for (const note of optionalCostumeNotes) {
+    const inputs = workflow[note.nodeId].inputs
+    if (typeof inputs.prompt === 'string') inputs.prompt = resolveWomensCostumePrompt(inputs.prompt, note)
   }
 
   // 3. 随机化种子
@@ -1553,6 +1574,7 @@ export async function generateCharacterImage(params: {
 
   const rawSources = [
     recipe.portrait && (recipe.portrait.原图 || recipe.portrait.缩略图),
+    recipe.portraitB && (recipe.portraitB.原图 || recipe.portraitB.缩略图),
     recipe.costume && (recipe.costume.预览图 || recipe.costume.原图 || recipe.costume.缩略图),
     recipe.pose && poseImagePath(recipe.pose),
     ...(recipe.extraImages || []).map((x) => x.url),
@@ -1582,6 +1604,7 @@ export async function generateCharacterImage(params: {
   const needBase64 =
     config.imagePassMode === 'base64' ||
     config.sendStitchedSheet ||
+    (provider === 'gpt' && config.gptParams.endpointMode === 'apimart') ||
     (provider === 'gemini' && config.geminiParams.endpointMode === 'native') ||
     (provider === 'gpt' && config.gptParams.endpointMode === 'images_edits')
 
@@ -1602,6 +1625,15 @@ export async function generateCharacterImage(params: {
   if (provider === 'gpt') {
     const g = config.gptParams
     const v1 = baseUrl.endsWith('/v1') ? baseUrl : `${baseUrl}/v1`
+
+    if (g.endpointMode === 'apimart') {
+      const imageUrl = await generateApimartImage({
+        baseUrl, apiKey, model, prompt, imageRefs: allImageRefs, params: g,
+        request: (url, init) => smartFetch(url, init, config.useProxy),
+        report: (message, percent) => onProgress?.({ stage: 'running', message, percent }),
+      })
+      return { imageUrl, modelUsed: model, providerUsed: provider }
+    }
 
     if (g.endpointMode === 'images_edits_json') {
       // OpenAI 最新 /v1/images/edits JSON 协议：直接传 images: [{ image_url: "https://..." }]，无需上传文件流！

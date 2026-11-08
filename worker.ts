@@ -1,4 +1,4 @@
-import { onRequestPost, type ProxyEnv } from './functions/api/proxy'
+import { onRequestGet, onRequestPost, type ProxyEnv } from './functions/api/proxy'
 
 export interface Env extends ProxyEnv {
   ASSETS: {
@@ -15,6 +15,7 @@ export default {
       if (request.method === 'POST') {
         return onRequestPost({ request, env })
       }
+      if (request.method === 'GET') return onRequestGet({ request, env })
       return new Response(JSON.stringify({ error: { message: 'Method Not Allowed' } }), {
         status: 405,
         headers: { 'Content-Type': 'application/json; charset=utf-8' },

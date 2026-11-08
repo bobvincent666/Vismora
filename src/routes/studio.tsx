@@ -11,7 +11,6 @@ import {
   CopyIcon,
   DicesIcon,
   DownloadIcon,
-  FileUpIcon,
   ImagePlusIcon,
   KeyRoundIcon,
   LayoutGridIcon,
@@ -58,6 +57,9 @@ import {
   STYLE_PRESETS,
 } from '@/services/aiGenerator'
 import { poseImagePath, poseThumbPath, referenceImageUrl, uploadedReferences } from '@/lib/recipeImages'
+import { isOptionalWomensCostume } from '@/services/optionalCostume'
+import { useTemplateLibrary } from '@/lib/useTemplateLibrary'
+import { cleanWorkflow, linkedLibraryPrompts, prepareLibraryWorkflow, type LibraryEntry } from '@/lib/templateLibrary'
 import { useStudio } from '@/store/studioStore'
 import type { RandomScope, ReferenceSlot } from '@/lib/randomRecipe'
 import { selectCostumeView } from '@/lib/costumeSources'
@@ -73,7 +75,7 @@ import type {
 } from '@/types/gallery'
 
 export const Route = createFileRoute('/studio')({
-  staticData: { title: 'AI 合成台' },
+  staticData: { title: 'AI工作台' },
   component: StudioPage,
 })
 
@@ -94,6 +96,7 @@ function StudioPage() {
     generationError,
     startGeneration,
     setPortrait,
+    setPortraitB,
     setCostume,
     setPose,
     toggleRecipePoseDepth,
@@ -115,10 +118,15 @@ function StudioPage() {
   const [comparisonResult, setComparisonResult] = useState<GenerationHistoryItem | null>(null)
   const previewResult = history.find((item) => item.imageUrl === previewUrl)
   const qc = useQueryClient()
+  const templateLibrary = useTemplateLibrary()
+  const libraryEntries = templateLibrary.data || []
+  const libraryWorkflows = libraryEntries.filter(entry => entry.kind === 'workflow')
+  const selectedLibraryWorkflow = libraryWorkflows.find(entry => entry.id === apiConfig.comfyuiParams.libraryWorkflowId)
+  const associatedPrompts = selectedLibraryWorkflow ? linkedLibraryPrompts(libraryEntries, selectedLibraryWorkflow.id) : []
+  const workflowSelection = selectedLibraryWorkflow && apiConfig.comfyuiParams.workflowPreset === 'custom' ? `library:${selectedLibraryWorkflow.id}` : apiConfig.comfyuiParams.workflowPreset
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const comfyFileInputRef = useRef<HTMLInputElement | null>(null)
   const slotInputRef = useRef<HTMLInputElement | null>(null)
-  const uploadSlotRef = useRef<'portrait' | 'costume' | 'pose'>('portrait')
+  const uploadSlotRef = useRef<'portrait' | 'portraitB' | 'costume' | 'pose'>('portrait')
   const [uploadingSlot, setUploadingSlot] = useState<string | null>(null)
   const [randomizingSlot, setRandomizingSlot] = useState<ReferenceSlot | null>(null)
   const [randomScopes, setRandomScopes] = useState<Record<ReferenceSlot, RandomScope>>({ portrait: 'similar', costume: 'similar', pose: 'similar' })
@@ -133,6 +141,7 @@ function StudioPage() {
   const activeWorkflowImages = activeProvider === 'comfyui' && recipe.workflowImagesIdentity === workflowIdentity(apiConfig.comfyuiParams.workflowJson) ? Object.values(recipe.workflowImages || {}) : []
   const defaultPrompt = buildRecipePrompt(recipe, apiConfig.stylePreset, activeWorkflowImages)
   const prompt = customPrompt ?? defaultPrompt
+  const keepsWorkflowPrompt = activeProvider === 'comfyui' && apiConfig.comfyuiParams.promptNodeId === 'none'
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [extraUrlInput, setExtraUrlInput] = useState('')
   const [showUrlInput, setShowUrlInput] = useState(false)
@@ -148,10 +157,34 @@ function StudioPage() {
     [apiConfig.comfyuiParams.workflowJson]
   )
 
+  const originalWorkflowPrompt = useMemo(() => {
+    const node = parsedComfyNodes.promptNodes.find((n) => !/negative|反向|负面/i.test(n.title))
+    if (!node) return null
+    try {
+      const workflow = JSON.parse(apiConfig.comfyuiParams.workflowJson)
+      return { nodeId: node.id, value: String(workflow[node.id].inputs[node.field]) }
+    } catch {
+      return null
+    }
+  }, [parsedComfyNodes, apiConfig.comfyuiParams.workflowJson])
+  const displayedPrompt = keepsWorkflowPrompt ? originalWorkflowPrompt?.value ?? '' : prompt
+
+  const editPagePrompt = (value: string | null) => {
+    if (keepsWorkflowPrompt) {
+      if (!originalWorkflowPrompt) {
+        toast.error('工作流中未找到正向提示词输入，请先检查工作流')
+        return
+      }
+      updateComfyUiParams({ promptNodeId: originalWorkflowPrompt.nodeId })
+    }
+    setCustomPrompt(value)
+  }
+
   const handleSelectComfyPreset = (preset: ComfyUiParams['workflowPreset']) => {
+    if (isGenerating) { toast.error('请等待当前任务完成后再切换工作流'); return }
     setComfyCheck(null)
     if (preset === 'custom') {
-      updateComfyUiParams({ workflowPreset: 'custom' })
+      updateComfyUiParams({ workflowPreset: 'custom', libraryWorkflowId: undefined, libraryPromptId: undefined })
       return
     }
     const tpl = COMFYUI_WORKFLOW_TEMPLATES[preset]
@@ -161,6 +194,17 @@ function StudioPage() {
       ...tpl.defaults,
     })
     toast.success(`已切换为：${tpl.label}`)
+  }
+
+  const handleSelectLibraryWorkflow = (entry: LibraryEntry, selectedPrompt?: LibraryEntry, keepOriginal = false) => {
+    if (isGenerating) { toast.error('请等待当前任务完成后再切换工作流'); return }
+    try {
+      const linkedPrompt = keepOriginal ? undefined : selectedPrompt || linkedLibraryPrompts(libraryEntries, entry.id)[0]
+      updateComfyUiParams(prepareLibraryWorkflow(entry, linkedPrompt))
+      setCustomPrompt(linkedPrompt?.content ?? null)
+      setComfyCheck(null)
+      toast.success(linkedPrompt ? `已加载模板及提示词：${linkedPrompt.title}` : '已加载模板，使用工作流原提示词')
+    } catch (error) { toast.error(error instanceof Error ? error.message : '加载模板失败') }
   }
 
   // 自动识别 ComfyUI 地址 + 检测工作流所需节点/模型是否在本机存在
@@ -188,6 +232,7 @@ function StudioPage() {
       const cp = apiConfig.comfyuiParams
       const result = await checkComfyWorkflow(found.baseUrl, cfg.apiKey, cp.workflowJson, [
         cp.portraitNodeId,
+        cp.portraitBNodeId,
         cp.costumeNodeId,
         cp.poseNodeId,
         cp.stitchedNodeId,
@@ -198,33 +243,6 @@ function StudioPage() {
       setComfyCheck({ ok: false, errors: [e instanceof Error ? e.message : '检测失败'], warnings: [], fixes: [] })
     } finally {
       setCheckingComfy(false)
-    }
-  }
-
-  const handleComfyFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    try {
-      const text = await file.text()
-      const info = parseComfyWorkflowNodes(text)
-      if (!info.valid) {
-        toast.error(info.error || '工作流 JSON 无效')
-        return
-      }
-      const detected = autoDetectComfyMappings(text)
-      setComfyCheck(null)
-      updateComfyUiParams({
-        workflowPreset: 'custom',
-        workflowJson: text,
-        ...detected,
-      })
-      setShowAdvanced(true)
-      toast.success(
-        `已导入工作流：识别到 ${info.imageNodes.length} 个图片节点、${info.promptNodes.length} 个提示词节点`
-      )
-    } catch {
-      toast.error('读取 JSON 文件失败')
     }
   }
 
@@ -273,6 +291,7 @@ function StudioPage() {
       const name = file.name.replace(/\.[^.]+$/, '') || '上传图片'
       const items = uploadedReferences(name, url, image.width, image.height, file.size)
       if (slot === 'portrait') setPortrait(items.portrait)
+      if (slot === 'portraitB') setPortraitB(items.portrait)
       if (slot === 'costume') setCostume(items.costume)
       if (slot === 'pose') setPose(items.pose)
     } catch (err) {
@@ -282,14 +301,16 @@ function StudioPage() {
     }
   }
 
+  const optionalWomensCostume = isOptionalWomensCostume(apiConfig.comfyuiParams.workflowJson, apiConfig.comfyuiParams.costumeNodeId)
   const missingReferences = activeProvider === 'comfyui' ? [
     { label: '人像', node: apiConfig.comfyuiParams.portraitNodeId, image: recipe.portrait },
+    { label: '人物B（男性头像）', node: apiConfig.comfyuiParams.portraitBNodeId, image: recipe.portraitB },
     { label: '服装', node: apiConfig.comfyuiParams.costumeNodeId, image: recipe.costume },
     { label: '姿势', node: apiConfig.comfyuiParams.poseNodeId, image: recipe.pose },
-  ].filter((slot) => slot.node && slot.node !== 'none' && parsedComfyNodes.imageNodes.some((node) => node.id === slot.node && node.emptyValue === undefined) && !slot.image).map((slot) => slot.label) : []
+  ].filter((slot) => !(slot.label === '服装' && optionalWomensCostume) && slot.node && slot.node !== 'none' && parsedComfyNodes.imageNodes.some((node) => node.id === slot.node && node.emptyValue === undefined) && !slot.image).map((slot) => slot.label) : []
 
   const extraImages = recipe.extraImages || []
-  const hasStitchRefs = Boolean(recipe.portrait || recipe.costume || recipe.pose || extraImages.length > 0)
+  const hasStitchRefs = Boolean(recipe.portrait || recipe.portraitB || recipe.costume || recipe.pose || extraImages.length > 0)
   const hasAnyRef = hasStitchRefs || activeWorkflowImages.length > 0
 
   const processFiles = async (files: File[]) => {
@@ -401,7 +422,7 @@ function StudioPage() {
     if (activeProvider === 'comfyui') {
       const cp = apiConfig.comfyuiParams
       const workflowImages = recipe.workflowImagesIdentity === workflowIdentity(cp.workflowJson) ? recipe.workflowImages || {} : {}
-      const selected = [recipe.portrait ? cp.portraitNodeId : '', recipe.costume ? cp.costumeNodeId : '', recipe.pose ? cp.poseNodeId : '', ...Object.keys(workflowImages)].filter((id) => id && id !== 'none')
+      const selected = [recipe.portrait ? cp.portraitNodeId : '', recipe.portraitB ? cp.portraitBNodeId : '', recipe.costume ? cp.costumeNodeId : '', recipe.pose ? cp.poseNodeId : '', ...Object.keys(workflowImages)].filter((id) => id && id !== 'none')
       const combinationError = validateReferenceCombinations(cp.workflowJson, selected)
       if (combinationError) { toast.error(combinationError); setShowAdvanced(true); return }
     }
@@ -416,7 +437,7 @@ function StudioPage() {
   return (
     <>
       <PageHeader
-        title="AI 角色合成台"
+        title="AI工作台"
         actions={
           activeProvider === 'comfyui' ? <ComfyConnectionStatus compact /> : <Button variant="outline" size="sm" asChild>
             <Link to="/settings">
@@ -482,8 +503,7 @@ function StudioPage() {
                 请先选择或上传：{missingReferences.join('、')}。这些槽位已绑定工作流节点。
               </div>
             )}
-            {/* 3 个核心图库槽位：手机端单列舒展展示，平板/桌面端三列并排 */}
-            <div className="grid min-w-0 grid-cols-1 gap-2 @min-[42rem]/section:grid-cols-3">
+            <div className="grid min-w-0 grid-cols-1 gap-2 @min-[42rem]/section:grid-cols-2 @min-[72rem]/section:grid-cols-4">
               {/* 人像槽 */}
               <div className={`relative flex min-w-0 flex-wrap items-start gap-2.5 rounded-xl bg-background p-2.5 ${showReferenceErrors && missingReferences.includes('人像') ? 'ring-1 ring-destructive' : ''}`}>
                 {recipe.portrait ? (
@@ -535,6 +555,33 @@ function StudioPage() {
                 {randomControls('portrait', '人像')}
               </div>
 
+              {/* 独立人物B槽位，避免复用服装或附图造成身份混淆 */}
+              <div className={`relative flex min-w-0 items-center gap-2 rounded-xl bg-background p-2 ${showReferenceErrors && missingReferences.includes('人物B（男性头像）') ? 'ring-1 ring-destructive' : ''}`}>
+                {recipe.portraitB ? (
+                  <>
+                    <button type="button" aria-label="放大人物B参考图" className="flex size-11 shrink-0 items-center justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-ring" onClick={() => setZoomImageUrl(referenceImageUrl(recipe.portraitB!.原图 || recipe.portraitB!.缩略图))}>
+                      <img src={referenceImageUrl(recipe.portraitB.缩略图)} alt={recipe.portraitB.标题} className="h-11 w-9 rounded-lg object-cover" />
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs text-muted-foreground">人物B · 男性头像</div>
+                      <div className="truncate text-xs font-medium" title={recipe.portraitB.标题}>{recipe.portraitB.标题}</div>
+                    </div>
+                    <button type="button" aria-label="清除人物B参考图" onClick={() => setPortraitB(null)} className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
+                      <XIcon className="size-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <div className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-muted-foreground">
+                    <UserRoundIcon className="size-4 shrink-0" />
+                    <span className="text-xs">人物B · 上传男性头像</span>
+                  </div>
+                )}
+                <Button type="button" variant="ghost" size="sm" aria-label="上传人物B男性头像" aria-describedby={showReferenceErrors && missingReferences.includes('人物B（男性头像）') ? 'reference-errors' : undefined} aria-busy={uploadingSlot === 'portraitB'} disabled={uploadingSlot !== null} className="h-11 shrink-0 border-l px-2 text-xs" onClick={() => { uploadSlotRef.current = 'portraitB'; slotInputRef.current?.click() }}>
+                  {uploadingSlot === 'portraitB' ? <LoaderCircleIcon className="size-3.5 animate-spin motion-reduce:animate-none" /> : <ImagePlusIcon className="size-3.5" />}
+                  {uploadingSlot === 'portraitB' ? '处理中' : recipe.portraitB ? '更换' : '上传'}
+                </Button>
+              </div>
+
               {/* 服装槽 */}
               <div className={`relative flex min-w-0 flex-wrap items-start gap-2.5 rounded-xl bg-background p-2.5 ${showReferenceErrors && missingReferences.includes('服装') ? 'ring-1 ring-destructive' : ''}`}>
                 {recipe.costume ? (
@@ -551,7 +598,7 @@ function StudioPage() {
                     </button>
                     <div className="flex min-h-12 min-w-0 flex-1 flex-col justify-between gap-1">
                       <div className="flex items-center justify-between gap-1">
-                        <span className="shrink-0 text-[11px] text-muted-foreground">服装</span>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">{optionalWomensCostume ? '女士服装 · 左侧人物A' : '服装'}</span>
                         <button
                           type="button"
                           aria-label="清除服装参考图"
@@ -585,7 +632,7 @@ function StudioPage() {
                       <div className="flex h-10 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
                         <ShirtIcon className="size-4" />
                       </div>
-                      <span className="truncate text-xs">+ 选服装</span>
+                      <span className="truncate text-xs">{optionalWomensCostume ? '女士服装（可选）' : '+ 选服装'}</span>
                     </Link>
                     <Button type="button" variant="ghost" size="sm" aria-label="上传服装参考图" aria-describedby={showReferenceErrors && missingReferences.includes('服装') ? 'reference-errors' : undefined} aria-busy={uploadingSlot === 'costume'} disabled={uploadingSlot !== null || randomizingSlot !== null} className="h-12 shrink-0 border-l px-2 text-xs" onClick={() => { uploadSlotRef.current = 'costume'; slotInputRef.current?.click() }}>
                       {uploadingSlot === 'costume' ? <LoaderCircleIcon className="size-3.5 animate-spin motion-reduce:animate-none" /> : <ImagePlusIcon className="size-3.5" />}
@@ -686,6 +733,8 @@ function StudioPage() {
                 {randomControls('pose', '姿势')}
               </div>
             </div>
+
+            {optionalWomensCostume && <p className="text-xs text-muted-foreground">女士服装为可选项：未选择时，左侧女士使用提示词中的默认服装；选择后仅替换左侧女士的服装，右侧男士不受影响。</p>}
 
             {/* 附加参考图列表 + 可视化拖拽/粘贴上传框 */}
             <div className="space-y-2 pt-1">
@@ -807,15 +856,20 @@ function StudioPage() {
               <Field label="工作流模板 (API 格式)">
                 <div className="space-y-2">
                   <Select
-                    value={apiConfig.comfyuiParams.workflowPreset}
-                    onValueChange={(v) =>
-                      handleSelectComfyPreset(v as ComfyUiParams['workflowPreset'])
-                    }
+                    value={workflowSelection}
+                    disabled={isGenerating}
+                    onValueChange={(v) => {
+                      if (v.startsWith('library:')) {
+                        const entry = libraryWorkflows.find(item => `library:${item.id}` === v)
+                        if (entry) handleSelectLibraryWorkflow(entry)
+                      } else handleSelectComfyPreset(v as ComfyUiParams['workflowPreset'])
+                    }}
                   >
-                    <SelectTrigger className="w-full text-xs">
+                    <SelectTrigger aria-label="工作流模板 (API 格式)" className="w-full text-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      {libraryWorkflows.map(entry => <SelectItem key={entry.id} value={`library:${entry.id}`} disabled={cleanWorkflow(entry.content).format !== 'api'} className="text-xs">我的模板 · {entry.title}{cleanWorkflow(entry.content).format === 'canvas' ? '（画布格式，需转 API）' : ''}</SelectItem>)}
                       {(Object.keys(COMFYUI_WORKFLOW_TEMPLATES) as ComfyPresetId[]).map((key) => (
                         <SelectItem key={key} value={key} className="text-xs">
                           {COMFYUI_WORKFLOW_TEMPLATES[key].label}
@@ -826,44 +880,17 @@ function StudioPage() {
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                  {templateLibrary.isError && <p role="alert" className="text-xs text-destructive">读取模板库失败，请到工作流模板配置页检查后重试。</p>}
+                  <Link to="/workflows" className="text-xs text-muted-foreground underline">管理我的工作流模板</Link>
+                  {selectedLibraryWorkflow && <div className="grid gap-2">
+                    <label htmlFor="associated-library-prompt" className="text-xs text-muted-foreground">关联提示词{associatedPrompts.length > 1 ? '（默认使用最近更新的一条）' : ''}</label>
+                    <Select value={apiConfig.comfyuiParams.libraryPromptId || 'original'} disabled={isGenerating} onValueChange={id => handleSelectLibraryWorkflow(selectedLibraryWorkflow, associatedPrompts.find(entry => entry.id === id), id === 'original')}>
+                      <SelectTrigger id="associated-library-prompt" className="w-full text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="original">使用工作流原提示词</SelectItem>{associatedPrompts.map(entry => <SelectItem key={entry.id} value={entry.id}>{entry.title}</SelectItem>)}</SelectContent>
+                    </Select>
+                    {!associatedPrompts.length && <p className="text-xs text-muted-foreground">暂无关联提示词，使用模板原提示词。可在提示词库中关联此模板。</p>}
+                  </div>}
                   <div className="flex flex-wrap gap-1.5">
-                    <input
-                      ref={comfyFileInputRef}
-                      type="file"
-                      accept=".json,application/json"
-                      onChange={handleComfyFileUpload}
-                      className="hidden"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => comfyFileInputRef.current?.click()}
-                    >
-                      <FileUpIcon className="size-3.5" />
-                      导入 .json
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => setShowComfyJsonModal(true)}
-                    >
-                      <CodeXmlIcon className="size-3.5" />
-                      编辑 JSON
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => void handleExportComfyJson()}
-                    >
-                      <DownloadIcon className="size-3.5" />
-                      导出 .json
-                    </Button>
                     <Button
                       type="button"
                       variant="outline"
@@ -877,7 +904,7 @@ function StudioPage() {
                       ) : (
                         <ScanSearchIcon className="size-3.5" />
                       )}
-                      检测本机模型
+                      {checkingComfy ? '检查中…' : '检查工作流兼容性'}
                     </Button>
                   </div>
                   {comfyCheck && (
@@ -996,6 +1023,16 @@ function StudioPage() {
                   </Select>
                 </Field>
 
+                <Field label="人物B / 男性头像节点 (LoadImage)">
+                  <Select value={apiConfig.comfyuiParams.portraitBNodeId || 'none'} onValueChange={(v) => updateComfyUiParams({ portraitBNodeId: v })}>
+                    <SelectTrigger className="w-full text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">不绑定（单人工作流）</SelectItem>
+                      {parsedComfyNodes.imageNodes.map((n) => <SelectItem key={n.id} value={n.id} className="text-xs">#{n.id} {n.title}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
                 <Field label="服装图节点 (LoadImage)">
                   <Select
                     value={apiConfig.comfyuiParams.costumeNodeId}
@@ -1055,7 +1092,19 @@ function StudioPage() {
               </>
             )}
 
-            {activeProvider === 'comfyui' && showAdvanced && <WorkflowParameters onPreview={setZoomImageUrl} onUploadingChange={setUploadingSlot} />}
+            {activeProvider === 'comfyui' && showAdvanced && <>
+              <Field label="工作流调试工具" hint="编辑和导出当前工作流；导入与长期管理请前往工作流模板配置。">
+                <div className="flex flex-wrap gap-1.5">
+                  <Button type="button" variant="outline" size="sm" disabled={isGenerating} onClick={() => setShowComfyJsonModal(true)}>
+                    <CodeXmlIcon className="size-3.5" />编辑 JSON
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => void handleExportComfyJson()}>
+                    <DownloadIcon className="size-3.5" />导出 .json
+                  </Button>
+                </div>
+              </Field>
+              <WorkflowParameters onPreview={setZoomImageUrl} onUploadingChange={setUploadingSlot} />
+            </>}
 
             {/* 展开的高级协议专属参数 */}
             {showAdvanced && (
@@ -1122,14 +1171,19 @@ function StudioPage() {
                     <Field label="调用端点 (endpointMode)">
                       <Select
                         value={apiConfig.gptParams.endpointMode}
-                        onValueChange={(v) =>
+                        onValueChange={(v) => {
+                          if (v === 'apimart') {
+                            updateProviderConfig('gpt', { baseUrl: 'https://api.apimart.ai/v1', model: 'gpt-image-2-official' })
+                            updateApiConfig({ useProxy: true })
+                          }
                           updateGptParams({ endpointMode: v as GptParams['endpointMode'] })
-                        }
+                        }}
                       >
                         <SelectTrigger className="w-full">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="apimart">APIMart 异步生图（官方渠道）</SelectItem>
                           <SelectItem value="images_edits_json">/v1/images/edits (JSON)</SelectItem>
                           <SelectItem value="responses">/v1/responses</SelectItem>
                           <SelectItem value="chat">/v1/chat/completions</SelectItem>
@@ -1137,7 +1191,30 @@ function StudioPage() {
                         </SelectContent>
                       </Select>
                     </Field>
-                    <Field label="输出尺寸 (size)">
+                    {apiConfig.gptParams.endpointMode === 'apimart' && (
+                      <>
+                        <p className="col-span-full text-xs text-muted-foreground">
+                          使用 gpt-image-2-official；参考图会先上传至 APIMart，再按人像、人物B（如有）、服装、姿势顺序提交。最多等待 10 分钟。
+                        </p>
+                        <Field label="画面比例 (size)">
+                          <Select value={apiConfig.gptParams.aspectRatio || '2:3'} onValueChange={(v) => updateGptParams({ aspectRatio: v as GptParams['aspectRatio'] })}>
+                            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {['2:3', '3:2', '1:1', '3:4', '4:3', '9:16', '16:9', '4:5', '5:4', 'auto'].map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </Field>
+                        <Field label="分辨率 (resolution)">
+                          <Select value={apiConfig.gptParams.resolution || '2k'} onValueChange={(v) => updateGptParams({ resolution: v as GptParams['resolution'] })}>
+                            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {['1k', '2k', '4k'].map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </Field>
+                      </>
+                    )}
+                    {apiConfig.gptParams.endpointMode !== 'apimart' && <Field label="输出尺寸 (size)">
                       <Select
                         value={apiConfig.gptParams.size}
                         onValueChange={(v) => updateGptParams({ size: v as GptParams['size'] })}
@@ -1152,7 +1229,7 @@ function StudioPage() {
                           <SelectItem value="auto">auto</SelectItem>
                         </SelectContent>
                       </Select>
-                    </Field>
+                    </Field>}
                     <Field label="渲染质量 (quality)">
                       <Select
                         value={apiConfig.gptParams.quality}
@@ -1163,15 +1240,15 @@ function StudioPage() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="high">high</SelectItem>
-                          <SelectItem value="xhigh">xhigh</SelectItem>
-                          <SelectItem value="max">max</SelectItem>
+                          {apiConfig.gptParams.endpointMode !== 'apimart' && <SelectItem value="xhigh">xhigh</SelectItem>}
+                          {apiConfig.gptParams.endpointMode !== 'apimart' && <SelectItem value="max">max</SelectItem>}
                           <SelectItem value="medium">medium</SelectItem>
                           <SelectItem value="low">low</SelectItem>
                           <SelectItem value="auto">auto</SelectItem>
                         </SelectContent>
                       </Select>
                     </Field>
-                    <Field label="参考还原度 (input_fidelity)">
+                    {apiConfig.gptParams.endpointMode !== 'apimart' && <Field label="参考还原度 (input_fidelity)">
                       <Select
                         value={apiConfig.gptParams.inputFidelity}
                         onValueChange={(v) =>
@@ -1186,8 +1263,8 @@ function StudioPage() {
                           <SelectItem value="low">low</SelectItem>
                         </SelectContent>
                       </Select>
-                    </Field>
-                    <Field label="背景模式 (background)">
+                    </Field>}
+                    {apiConfig.gptParams.endpointMode !== 'apimart' && <Field label="背景模式 (background)">
                       <Select
                         value={apiConfig.gptParams.background}
                         onValueChange={(v) =>
@@ -1203,7 +1280,7 @@ function StudioPage() {
                           <SelectItem value="opaque">opaque</SelectItem>
                         </SelectContent>
                       </Select>
-                    </Field>
+                    </Field>}
                     <Field label="图片格式 (output_format)">
                       <Select
                         value={apiConfig.gptParams.outputFormat}
@@ -1412,7 +1489,7 @@ function StudioPage() {
             className="@lg/section:grid-cols-1"
             actions={
               <div className="flex items-center gap-1.5">
-                <Button variant="ghost" size="sm" onClick={() => setCustomPrompt(null)}>
+                <Button variant="ghost" size="sm" onClick={() => editPagePrompt(null)}>
                   <RotateCcwIcon className="size-3.5" />
                   重置
                 </Button>
@@ -1420,7 +1497,7 @@ function StudioPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    void navigator.clipboard.writeText(prompt)
+                    void navigator.clipboard.writeText(displayedPrompt)
                     toast.success('已复制')
                   }}
                 >
@@ -1430,9 +1507,14 @@ function StudioPage() {
               </div>
             }
           >
+            {keepsWorkflowPrompt && (
+              <p role="status" className="text-xs leading-relaxed text-muted-foreground">
+                当前显示并使用工作流原提示词。可直接编辑；修改后将自动使用你输入的提示词。
+              </p>
+            )}
             <Textarea
-              value={prompt}
-              onChange={(e) => setCustomPrompt(e.target.value)}
+              value={displayedPrompt}
+              onChange={(e) => editPagePrompt(e.target.value)}
               rows={5}
               className="bg-background font-mono text-xs leading-relaxed"
             />
@@ -1653,7 +1735,10 @@ function StudioPage() {
                   return
                 }
                 const detected = autoDetectComfyMappings(apiConfig.comfyuiParams.workflowJson)
-                updateComfyUiParams(detected)
+                updateComfyUiParams({
+                  ...detected,
+                  promptNodeId: apiConfig.comfyuiParams.promptNodeId === 'none' ? 'none' : detected.promptNodeId,
+                })
                 toast.success(
                   `已自动重新识别节点：${info.imageNodes.length} 个图片节点、${info.promptNodes.length} 个提示词节点`
                 )

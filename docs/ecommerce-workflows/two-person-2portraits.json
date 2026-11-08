@@ -1,0 +1,726 @@
+{
+  "id": "3e670214-becc-4212-92a9-b3a08ea505a6",
+  "revision": 3,
+  "last_node_id": 14,
+  "last_link_id": 18,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "UnetLoaderGGUF",
+      "pos": [
+        40,
+        60
+      ],
+      "size": [
+        460,
+        80
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            16
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "UnetLoaderGGUF"
+      },
+      "widgets_values": [
+        "Qwen-Image-2.1-Turbo-AD-Q4_K.gguf"
+      ],
+      "widgets_values_named": {
+        "unet_name": "Qwen-Image-2.1-Turbo-AD-Q4_K.gguf"
+      }
+    },
+    {
+      "id": 2,
+      "type": "CLIPLoaderGGUF",
+      "pos": [
+        40,
+        180
+      ],
+      "size": [
+        460,
+        110
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            2
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CLIPLoaderGGUF"
+      },
+      "widgets_values": [
+        "Qwen-Image-2.1-Turbo-Uncensored-AD-Q4_K.gguf",
+        "qwen_image"
+      ],
+      "widgets_values_named": {
+        "clip_name": "Qwen-Image-2.1-Turbo-Uncensored-AD-Q4_K.gguf",
+        "type": "qwen_image"
+      }
+    },
+    {
+      "id": 3,
+      "type": "VAELoader",
+      "pos": [
+        40,
+        340
+      ],
+      "size": [
+        460,
+        80
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            3,
+            13
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      },
+      "widgets_values": [
+        "qwen_image_2.1_vae_bf16.safetensors"
+      ],
+      "widgets_values_named": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    },
+    {
+      "id": 4,
+      "type": "TextEncodeQwenImage21",
+      "pos": [
+        1080,
+        60
+      ],
+      "size": [
+        620,
+        570
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 2
+        },
+        {
+          "name": "images.image_1",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 12
+        },
+        {
+          "name": "images.image_2",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 14
+        },
+        {
+          "name": "images.image_3",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 18
+        },
+        {
+          "name": "vae",
+          "shape": 7,
+          "type": "VAE",
+          "link": 13
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "links": [
+            4
+          ]
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "links": [
+            5
+          ]
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "links": [
+            6
+          ]
+        }
+      ],
+      "title": "双人互动：图1姿势 / 图2左侧人物 / 图3右侧人物",
+      "properties": {
+        "Node name for S&R": "TextEncodeQwenImage21"
+      },
+      "widgets_values": [
+        "Create one photorealistic full-body photograph of exactly two fully clothed adults using three reference images.\nImage 1 provides the interacting pose of BOTH people and the camera view. The person on the LEFT side of image 1 is Person A; the person on the RIGHT side is Person B. Match their relative positions, facing directions, head orientations, body lean, hand contact, limb placement, overlap and foot placement.\nImage 2 provides the facial identity, hairstyle and skin tone of Person A ONLY. Place this adult person on the LEFT, in the pose of the left figure in image 1. Adapt the face to the head orientation in image 1 rather than copying the gaze, pose or framing from image 2.\nImage 3 provides the facial identity, hairstyle and skin tone of Person B ONLY. Place this adult person on the RIGHT, in the pose of the right figure in image 1. Adapt the face to the head orientation in image 1 rather than copying the gaze, pose or framing from image 3. Preserve two distinct identities; do not swap, blend or duplicate their faces.\nThere are NO clothing reference images. Dress Person A in a plain cream long-sleeved shirt, blue jeans and white low-top sneakers. Dress Person B in a plain navy long-sleeved shirt, dark gray trousers and black shoes.\nFor this pose, the two adults stand close together facing one another. Person A stands on one supporting leg with the other knee bent and the foot lifted behind, as shown in image 1. Person B places both hands at Person A's waist as shown in image 1. Match the reference rather than inventing a new interaction. Keep the two bodies anatomically separate, and place each hand naturally on the correct body.\nShow both complete people from head to feet in one frame, including the raised foot. Use natural anatomy, realistic fabric and neutral studio lighting. Use the mannequin drawing only as pose guidance; do not copy mannequin surfaces, joint circles, construction lines or drawing style. Output one photograph with exactly two people, without text, watermark or collage.",
+        "single person, third person, duplicate person, duplicate face, merged bodies, fused torsos, extra arms, extra legs, extra hands, missing limbs, malformed hands, fused fingers, floating feet, cropped head, cropped feet, mannequin, joint circles, construction lines, sketch, line art, text, watermark",
+        768
+      ],
+      "widgets_values_named": {
+        "prompt": "Create one photorealistic full-body photograph of exactly two fully clothed adults using three reference images.\nImage 1 provides the interacting pose of BOTH people and the camera view. The person on the LEFT side of image 1 is Person A; the person on the RIGHT side is Person B. Match their relative positions, facing directions, head orientations, body lean, hand contact, limb placement, overlap and foot placement.\nImage 2 provides the facial identity, hairstyle and skin tone of Person A ONLY. Place this adult person on the LEFT, in the pose of the left figure in image 1. Adapt the face to the head orientation in image 1 rather than copying the gaze, pose or framing from image 2.\nImage 3 provides the facial identity, hairstyle and skin tone of Person B ONLY. Place this adult person on the RIGHT, in the pose of the right figure in image 1. Adapt the face to the head orientation in image 1 rather than copying the gaze, pose or framing from image 3. Preserve two distinct identities; do not swap, blend or duplicate their faces.\nThere are NO clothing reference images. Dress Person A in a plain cream long-sleeved shirt, blue jeans and white low-top sneakers. Dress Person B in a plain navy long-sleeved shirt, dark gray trousers and black shoes.\nFor this pose, the two adults stand close together facing one another. Person A stands on one supporting leg with the other knee bent and the foot lifted behind, as shown in image 1. Person B places both hands at Person A's waist as shown in image 1. Match the reference rather than inventing a new interaction. Keep the two bodies anatomically separate, and place each hand naturally on the correct body.\nShow both complete people from head to feet in one frame, including the raised foot. Use natural anatomy, realistic fabric and neutral studio lighting. Use the mannequin drawing only as pose guidance; do not copy mannequin surfaces, joint circles, construction lines or drawing style. Output one photograph with exactly two people, without text, watermark or collage.",
+        "negative_prompt": "single person, third person, duplicate person, duplicate face, merged bodies, fused torsos, extra arms, extra legs, extra hands, missing limbs, malformed hands, fused fingers, floating feet, cropped head, cropped feet, mannequin, joint circles, construction lines, sketch, line art, text, watermark",
+        "resolution": 768
+      }
+    },
+    {
+      "id": 11,
+      "type": "LoadImage",
+      "pos": [
+        40,
+        960
+      ],
+      "size": [
+        300,
+        420
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            12
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "title": "图1：姿势参考 (Pose)",
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "select-pose.png",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "select-pose.png",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 5,
+      "type": "KSamplerSelect",
+      "pos": [
+        1080,
+        690
+      ],
+      "size": [
+        320,
+        80
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "SAMPLER",
+          "type": "SAMPLER",
+          "links": [
+            7
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "KSamplerSelect"
+      },
+      "widgets_values": [
+        "euler"
+      ],
+      "widgets_values_named": {
+        "sampler_name": "euler"
+      }
+    },
+    {
+      "id": 6,
+      "type": "SamplerCustom",
+      "pos": [
+        1780,
+        60
+      ],
+      "size": [
+        350,
+        330
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 1
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 4
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 5
+        },
+        {
+          "name": "sampler",
+          "type": "SAMPLER",
+          "link": 7
+        },
+        {
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "link": 9
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 6
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output",
+          "type": "LATENT",
+          "links": [
+            10
+          ]
+        },
+        {
+          "name": "denoised_output",
+          "type": "LATENT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "SamplerCustom"
+      },
+      "widgets_values": [
+        true,
+        24092026,
+        "fixed",
+        1
+      ],
+      "widgets_values_named": {
+        "add_noise": true,
+        "noise_seed": 24092026,
+        "control_after_generate": "fixed",
+        "cfg": 1
+      }
+    },
+    {
+      "id": 7,
+      "type": "VAEDecode",
+      "pos": [
+        2190,
+        60
+      ],
+      "size": [
+        230,
+        80
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 10
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            11
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEDecode"
+      }
+    },
+    {
+      "id": 8,
+      "type": "SaveImage",
+      "pos": [
+        2361.0538469093894,
+        301.3247585557948
+      ],
+      "size": [
+        400,
+        400
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 11
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "two-person-two-identities/result"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "two-person-two-identities/result"
+      }
+    },
+    {
+      "id": 10,
+      "type": "ManualSigmas",
+      "pos": [
+        1080,
+        820
+      ],
+      "size": [
+        510,
+        90
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "SIGMAS",
+          "type": "SIGMAS",
+          "links": [
+            9
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ManualSigmas"
+      },
+      "widgets_values": [
+        "1.0,0.978453,0.95418,0.926626,0.89508,0.845148,0.704534,0.414568,0.0"
+      ],
+      "widgets_values_named": {
+        "sigmas": "1.0,0.978453,0.95418,0.926626,0.89508,0.845148,0.704534,0.414568,0.0"
+      }
+    },
+    {
+      "id": 12,
+      "type": "LoadImage",
+      "pos": [
+        40,
+        480
+      ],
+      "size": [
+        300,
+        420
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            14
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "title": "图2：左侧人物A（人像参考）",
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "select-person-a.png",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "select-person-a.png",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 14,
+      "type": "LoraLoaderModelOnly",
+      "pos": [
+        550,
+        1000
+      ],
+      "size": [
+        460,
+        130
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 16
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "title": "VNCCS QI2 PoseStudio V1.1 (Turbo compatibility experiment)",
+      "properties": {
+        "Node name for S&R": "LoraLoaderModelOnly"
+      },
+      "widgets_values": [
+        "VNCCS_QI2_PoseStudioV1.1.safetensors",
+        1
+      ],
+      "widgets_values_named": {
+        "lora_name": "VNCCS_QI2_PoseStudioV1.1.safetensors",
+        "strength_model": 1
+      }
+    },
+    {
+      "id": 13,
+      "type": "LoadImage",
+      "pos": [
+        380,
+        480
+      ],
+      "size": [
+        300,
+        420
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            18
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "title": "图3：右侧人物B（人像参考）",
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "select-person-b.png",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "select-person-b.png",
+        "upload": "image"
+      }
+    }
+  ],
+  "links": [
+    [
+      1,
+      14,
+      0,
+      6,
+      0,
+      "MODEL"
+    ],
+    [
+      3,
+      3,
+      0,
+      7,
+      1,
+      "VAE"
+    ],
+    [
+      4,
+      4,
+      0,
+      6,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      5,
+      4,
+      1,
+      6,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      6,
+      4,
+      2,
+      6,
+      5,
+      "LATENT"
+    ],
+    [
+      7,
+      5,
+      0,
+      6,
+      3,
+      "SAMPLER"
+    ],
+    [
+      9,
+      10,
+      0,
+      6,
+      4,
+      "SIGMAS"
+    ],
+    [
+      10,
+      6,
+      0,
+      7,
+      0,
+      "LATENT"
+    ],
+    [
+      11,
+      7,
+      0,
+      8,
+      0,
+      "IMAGE"
+    ],
+    [
+      16,
+      1,
+      0,
+      14,
+      0,
+      "MODEL"
+    ],
+    [
+      2,
+      2,
+      0,
+      4,
+      0,
+      "CLIP"
+    ],
+    [
+      12,
+      11,
+      0,
+      4,
+      1,
+      "IMAGE"
+    ],
+    [
+      14,
+      12,
+      0,
+      4,
+      2,
+      "IMAGE"
+    ],
+    [
+      13,
+      3,
+      0,
+      4,
+      4,
+      "VAE"
+    ],
+    [
+      18,
+      13,
+      0,
+      4,
+      3,
+      "IMAGE"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 1.351305709310403,
+      "offset": [
+        -1692.5919890082182,
+        6.067874611790048
+      ]
+    },
+    "frontendVersion": "1.57.1"
+  },
+  "extensions": {
+    "seed_widgets": {
+      "6": 1
+    }
+  },
+  "version": 0.4
+}

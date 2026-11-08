@@ -25,7 +25,7 @@ export function AppHeader() {
       matches.filter((m) => m.staticData.title).map((m) => ({ title: m.staticData.title!, path: m.pathname })),
   })
 
-  const selectedCount = [recipe.portrait, recipe.costume, recipe.pose].filter(Boolean).length
+  const selectedCount = [recipe.portrait, recipe.portraitB, recipe.costume, recipe.pose].filter(Boolean).length
 
   const handleRandom = async () => {
     const [posesRes, costumes, portraits] = await Promise.all([
@@ -84,9 +84,9 @@ export function AppHeader() {
           随机捏人
         </Button>
         <Button size="sm" asChild>
-          <Link to="/studio" aria-label={`AI 合成台，已选 ${selectedCount} 项参考图`}>
+          <Link to="/studio" aria-label={`AI工作台，已选 ${selectedCount} 项参考图`}>
             <SparklesIcon className="size-3.5" />
-            <span className="hidden @lg/header:inline">AI 合成台</span>
+            <span className="hidden @lg/header:inline">AI工作台</span>
             {selectedCount > 0 && (
               <span className="ml-1 rounded-full bg-primary-foreground/20 px-1.5 py-0.2 text-[11px] font-bold">
                 {selectedCount}/3

@@ -1,0 +1,198 @@
+{
+  "1": {
+    "inputs": {
+      "unet_name": "Qwen-Image-2.1-Turbo-AD-Q4_K.gguf"
+    },
+    "class_type": "UnetLoaderGGUF",
+    "_meta": {
+      "title": "Unet Loader (GGUF)"
+    }
+  },
+  "2": {
+    "inputs": {
+      "clip_name": "Qwen-Image-2.1-Turbo-Uncensored-AD-Q4_K.gguf",
+      "type": "qwen_image"
+    },
+    "class_type": "CLIPLoaderGGUF",
+    "_meta": {
+      "title": "CLIPLoader (GGUF)"
+    }
+  },
+  "3": {
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "加载VAE"
+    }
+  },
+  "4": {
+    "inputs": {
+      "prompt": "Create one photorealistic full-body photograph of exactly two adults wearing the specified outfits using three reference images.\nImage 1 provides the interacting pose of BOTH people and the camera view. The person on the LEFT side of image 1 is Person A; the person on the RIGHT side is Person B. Match their relative positions, facing directions, head orientations, body lean, hand contact, limb placement, overlap and foot placement.\nImage 2 provides the facial identity, hairstyle and skin tone of Person A ONLY. Place this adult person on the LEFT, in the pose of the left figure in image 1. Adapt the face to the head orientation in image 1 rather than copying the gaze, pose or framing from image 2.\nImage 3 provides the facial identity, hairstyle and skin tone of Person B ONLY. Place this adult person on the RIGHT, in the pose of the right figure in image 1. Adapt the face to the head orientation in image 1 rather than copying the gaze, pose or framing from image 3. Preserve two distinct identities; do not swap, blend or duplicate their faces.\n  Dress Person B in a plain navy long-sleeved shirt, dark gray trousers and black shoes.\nFor this pose, the two adults stand close together facing one another. Person A stands on one supporting leg with the other knee bent and the foot lifted behind, as shown in image 1. Person B places both hands at Person A's waist as shown in image 1. Match the reference rather than inventing a new interaction. Keep the two bodies anatomically separate, and place each hand naturally on the correct body.\nShow both complete people from head to feet in one frame, including the raised foot. Use natural anatomy, realistic fabric and neutral studio lighting. Use the mannequin drawing only as pose guidance; do not copy mannequin surfaces, joint circles, construction lines or drawing style. Output one photograph with exactly two people, without text, watermark or collage.",
+      "negative_prompt": "single person, third person, duplicate person, duplicate face, merged bodies, fused torsos, extra arms, extra legs, extra hands, missing limbs, malformed hands, fused fingers, floating feet, cropped head, cropped feet, mannequin, joint circles, construction lines, sketch, line art, text, watermark",
+      "resolution": 768,
+      "clip": [
+        "2",
+        0
+      ],
+      "images.image_1": [
+        "11",
+        0
+      ],
+      "images.image_2": [
+        "12",
+        0
+      ],
+      "images.image_3": [
+        "13",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ],
+      "images.image_4": [
+        "15",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImage21",
+    "_meta": {
+      "title": "双人互动：图1姿势 / 图2女士A / 图3男士B / 图4可选女士服装"
+    }
+  },
+  "5": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "K采样器选择"
+    }
+  },
+  "6": {
+    "inputs": {
+      "add_noise": true,
+      "noise_seed": 24092026,
+      "cfg": 1,
+      "model": [
+        "14",
+        0
+      ],
+      "positive": [
+        "4",
+        0
+      ],
+      "negative": [
+        "4",
+        1
+      ],
+      "sampler": [
+        "5",
+        0
+      ],
+      "sigmas": [
+        "10",
+        0
+      ],
+      "latent_image": [
+        "4",
+        2
+      ]
+    },
+    "class_type": "SamplerCustom",
+    "_meta": {
+      "title": "自定义采样器"
+    }
+  },
+  "7": {
+    "inputs": {
+      "samples": [
+        "6",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE解码"
+    }
+  },
+  "8": {
+    "inputs": {
+      "filename_prefix": "two-person-optional-womens-outfit/result",
+      "images": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "保存图像"
+    }
+  },
+  "10": {
+    "inputs": {
+      "sigmas": "1.0,0.978453,0.95418,0.926626,0.89508,0.845148,0.704534,0.414568,0.0"
+    },
+    "class_type": "ManualSigmas",
+    "_meta": {
+      "title": "自定义Sigmas"
+    }
+  },
+  "11": {
+    "inputs": {
+      "image": "select-pose.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "图1：姿势参考 (Pose)"
+    }
+  },
+  "12": {
+    "inputs": {
+      "image": "select-person-a.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "图2：左侧人物A（人像参考）"
+    }
+  },
+  "13": {
+    "inputs": {
+      "image": "select-person-b.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "图3：右侧人物B（人像参考）"
+    }
+  },
+  "14": {
+    "inputs": {
+      "lora_name": "VNCCS_QI2_PoseStudioV1.1.safetensors",
+      "strength_model": 1,
+      "model": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "VNCCS QI2 PoseStudio V1.1 (Turbo compatibility experiment)"
+    }
+  },
+  "15": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": ""
+    },
+    "_meta": {
+      "title": "女士服装（可选，仅左侧人物A）",
+      "optionalReference": "womens_clothing"
+    }
+  }
+}
